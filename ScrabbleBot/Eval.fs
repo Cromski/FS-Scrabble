@@ -1,12 +1,33 @@
 ﻿// Insert your updated Eval.fs file here from Assignment 7. All modules must be internal.
 
 module internal Eval
-
+    
+    open System
     open StateMonad
 
-    let add a b = failwith "Not implemented"      
-    let div a b = failwith "Not implemented"      
+    (* Code for testing *)
 
+    let hello = [('H', 4); ('E', 1); ('L', 1); ('L', 1); ('O', 1);]
+    let state = mkState [("x", 5); ("y", 42)] hello ["_pos_"; "_result_"]
+    let emptyState = mkState [] [] []
+    
+    // sm<res> >>= fun res -> res2 
+    let add a b =
+        a >>= (fun x -> b >>= fun y -> ret(x + y))
+     
+    let sub a b =
+        a >>= (fun x -> b >>= fun y -> ret(x - y))
+        
+    let mul a b =
+        a >>= (fun x -> b >>= fun y -> ret (x * y))
+    let div a b =
+        a >>= (fun x -> b >>= fun y -> if y <> 0 then ret (x / y) else fail (DivisionByZero))
+    
+    let modulo a b =
+        a >>= (fun x -> b >>= fun y -> if y <> 0 then ret (x % y) else fail (DivisionByZero))    
+
+    let charToInt c = c >>= fun x -> ret (x - int '0')
+    
     type aExp =
         | N of int
         | V of string
@@ -37,7 +58,8 @@ module internal Eval
        | Conj of bExp * bExp  (* boolean conjunction *)
 
        | IsVowel of cExp      (* check for vowel *)
-       | IsConsonant of cExp  (* check for constant *)
+       | IsLetter of cExp     (* check for letter *)
+       | IsDigit of cExp      (* check for digit *)
 
     let (.+.) a b = Add (a, b)
     let (.-.) a b = Sub (a, b)
@@ -57,11 +79,41 @@ module internal Eval
     let (.>=.) a b = ~~(a .<. b)                (* numeric greater than or equal to *)
     let (.>.) a b = ~~(a .=. b) .&&. (a .>=. b) (* numeric greater than *)    
 
-    let arithEval a : SM<int> = failwith "Not implemented"      
+    let rec arithEval a : SM<int> =
+        match a with
+         | N n -> ret n
+         | V v -> lookup v
+         | WL -> wordLength
+         | PV x -> arithEval x >>= pointValue
+         | Add (b, c)-> add (arithEval b) (arithEval c)
+         | Sub (b, c) -> sub (arithEval b) (arithEval c)
+         | Mul (b, c) -> mul (arithEval b) (arithEval c)
+         | Div (a, b) -> div (arithEval a) (arithEval b)
+         | Mod (a, b) -> modulo (arithEval a) (arithEval b)
+         | CharToInt a -> (charEval a) >>= fun x -> ret (int x) 
 
-    let charEval c : SM<char> = failwith "Not implemented"      
+    and charEval c : SM<char> =
+        match c with
+         | C a -> ret a  (* Character value *)
+         | CV exp-> (arithEval exp) >>= characterValue (* Character lookup at word index *)
+         | ToUpper a -> charEval a >>= fun x -> ret (System.Char.ToUpper x) 
+         | ToLower a -> charEval a >>= fun x -> ret (System.Char.ToLower x) 
+         | IntToChar a -> (arithEval a) >>= fun x -> ret (char x)
 
-    let boolEval b : SM<bool> = failwith "Not implemented"
+    let vowel:char list = ['a'; 'e'; 'i'; 'o'; 'u'; 'y'; 'A';'E';'I';'O';'U';'Y']
+    let rec boolEval b : SM<bool> =
+        match b with
+         | TT -> ret true               (* true *)
+         | FF  -> ret false                 (* false *)
+         | AEq (c, d) -> (arithEval c) >>= fun x -> (arithEval d) >>= fun y -> ret (x = y)  (* numeric equality *)
+         | ALt (c, d) ->
+             (arithEval c) >>= fun x -> (arithEval d) >>= fun y -> ret (x < y)
+         | Not c -> (boolEval c) >>= fun x -> ret (not x)       (* boolean not *)
+         | Conj (c, d) -> (boolEval c) >>= fun x -> (boolEval d) >>= fun y -> ret (x && y)
+         | IsDigit c -> (charEval c) >>= fun x -> ret(Char.IsDigit (x))
+         | IsLetter c -> (charEval c) >>= fun x -> ret(Char.IsLetter(x))   (* check for vowel *)
+         | IsVowel c -> (charEval c) >>= fun x -> ret(List.contains x vowel)
+
 
 
     type stm =                (* statements *)
@@ -92,7 +144,7 @@ module internal Eval
 
     let stmntEval2 stm = failwith "Not implemented"
 
-(* Part 4 *) 
+(* Part 4 (Optional) *) 
 
     type word = (char * int) list
     type squareFun = word -> int -> int -> Result<int, Error>
@@ -113,3 +165,4 @@ module internal Eval
     }
 
     let mkBoard c defaultSq boardStmnt ids = failwith "Not implemented"
+    
