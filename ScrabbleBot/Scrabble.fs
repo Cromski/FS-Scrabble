@@ -88,24 +88,20 @@ module Scrabble =
                 
                 //add points
                 st.points <- st.points + uint32 points
-                
-                //update board
-                
-                
-                let st' = st // This state needs to be updated
-
-                
-                forcePrint (sprintf "Player %A <- Server:\n%A\n" newPieces move)
+                                
+                let st' = st 
 
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
-                //
                 
                 let st' = st // This state needs to be updated
                 aux st'
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
+                //
+                
+                
                 let st' = st // This state needs to be updated
                 aux st'
             | RCM (CMGameOver _) -> ()
