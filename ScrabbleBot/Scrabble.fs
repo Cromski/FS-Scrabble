@@ -81,20 +81,21 @@ module Scrabble =
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 
                 //removes old pieces from hand
-                //st.hand = for play in ms do MultiSet.removeSingle (play |> snd |> fst) st.hand
-                st.hand = (seq{for i in 1 .. MultiSet.size st.hand do yield MultiSet.removeSingle (play |> snd |> fst) st.hand}) |> Map.to
+                for play in ms do st.hand <- MultiSet.removeSingle (play |> snd |> fst) st.hand
+                
                 //adds new pieces to hand
-                for piece in newPieces do seq { for _ in 1u .. (snd piece) ->  MultiSet.add (fst piece) (snd piece) st.hand } |> ignore //TODO: might need to not ignore if values aren't changed, but just stored in new map
-                //change turn
+                for piece in newPieces do st.hand <- MultiSet.add (fst piece) (snd piece) st.hand
                 
                 //add points
                 st.points <- st.points + uint32 points
+                
                 //update board
-                st.board.defaultSquare
+                
                 
                 let st' = st // This state needs to be updated
 
-                debugPrint (sprintf "Player %A <- Server:\n%A\n" (State.hand st) move)
+                
+                forcePrint (sprintf "Player %A <- Server:\n%A\n" newPieces move)
 
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
