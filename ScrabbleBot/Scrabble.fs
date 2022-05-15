@@ -1,5 +1,6 @@
 ﻿namespace OsmanOgJeppe
 
+open Eval
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
 
@@ -46,9 +47,11 @@ module State =
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
+        
+        mutable points        : uint32
     }
 
-    let mkState b d pn h = {board = b; dict = d;  playerNumber = pn; hand = h }
+    let mkState b d pn h p = {board = b; dict = d;  playerNumber = pn; hand = h; points = p }
 
     let board st         = st.board
     let dict st          = st.dict
@@ -77,10 +80,24 @@ module Scrabble =
             match msg with
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
+                
+                //removes old pieces from hand
+                for play in ms do MultiSet.removeSingle (play |> snd |> fst) st.hand |> ignore
+                //adds new pieces to hand
+                for piece in newPieces do seq { for _ in 1u .. (snd piece) ->  MultiSet.add (fst piece) (snd piece) st.hand } |> ignore //TODO: might need to not ignore if values aren't changed, but just stored in new map
+                //change turn
+                
+                //add points
+                st.points <- st.points + uint32 points
+                //update board
+                st.board.defaultSquare
+                
                 let st' = st // This state needs to be updated
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
+                //
+                
                 let st' = st // This state needs to be updated
                 aux st'
             | RCM (CMPlayFailed (pid, ms)) ->
