@@ -81,7 +81,7 @@ module Scrabble =
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 
                 //removes old pieces from hand
-                for play in ms do MultiSet.removeSingle (play |> snd |> fst) st.hand |> ignore
+                do st.hand = for play in ms do MultiSet.removeSingle (play |> snd |> fst) st.hand
                 //adds new pieces to hand
                 for piece in newPieces do seq { for _ in 1u .. (snd piece) ->  MultiSet.add (fst piece) (snd piece) st.hand } |> ignore //TODO: might need to not ignore if values aren't changed, but just stored in new map
                 //change turn
@@ -92,6 +92,9 @@ module Scrabble =
                 st.board.defaultSquare
                 
                 let st' = st // This state needs to be updated
+
+                debugPrint (sprintf "Player %A <- Server:\n%A\n" (State.hand st) move)
+
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
@@ -106,6 +109,7 @@ module Scrabble =
             | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
             | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
+
 
 
         aux st
