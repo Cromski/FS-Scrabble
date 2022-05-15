@@ -46,7 +46,7 @@ module State =
         board         : Parser.board
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
-        hand          : MultiSet.MultiSet<uint32>
+        mutable hand          : MultiSet.MultiSet<uint32>
         mutable points        : uint32
     }
 
@@ -81,7 +81,8 @@ module Scrabble =
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 
                 //removes old pieces from hand
-                do st.hand = for play in ms do MultiSet.removeSingle (play |> snd |> fst) st.hand
+                //st.hand = for play in ms do MultiSet.removeSingle (play |> snd |> fst) st.hand
+                st.hand = (seq{for i in 1 .. MultiSet.size st.hand do yield MultiSet.removeSingle (play |> snd |> fst) st.hand}) |> Map.to
                 //adds new pieces to hand
                 for piece in newPieces do seq { for _ in 1u .. (snd piece) ->  MultiSet.add (fst piece) (snd piece) st.hand } |> ignore //TODO: might need to not ignore if values aren't changed, but just stored in new map
                 //change turn
