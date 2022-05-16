@@ -37,33 +37,93 @@ module RegEx =
         MultiSet.fold (fun _ x i -> forcePrint (sprintf "%d -> (%A, %d)\n" x (Map.find x pieces) i)) ()
 
 module State = 
+
+
     // Make sure to keep your state localised in this module. It makes your life a whole lot easier.
     // Currently, it only keeps track of your hand, your player numer, your board, and your dictionary,
     // but it could, potentially, keep track of other useful
     // information, such as number of players, player turn, etc.
 
     type state = {
-        board         : Parser.board
-        dict          : ScrabbleUtil.Dictionary.Dict
-        playerNumber  : uint32
+        board                 : Parser.board
+        dict                  : Dictionary.Dict
+        playerNumber          : uint32
         mutable hand          : MultiSet.MultiSet<uint32>
         mutable points        : uint32
+        coordsOfChars         : Map<coord, char>
     }
+(*
+    type brick = char*int
+    type id2brick = uint32*brick
+    type play = (coord * id2brick) list *)
 
-    let mkState b d pn h p = {board = b; dict = d;  playerNumber = pn; hand = h; points = p }
+    type tile = char * int
+    type piece = uint32 * tile
+    type move = (coord * piece) list
+
+
+    let mkState b d pn h p map = {board = b; dict = d;  playerNumber = pn; hand = h; points = p; coordsOfChars = map}
 
     let board st         = st.board
     let dict st          = st.dict
     let playerNumber st  = st.playerNumber
     let hand st          = st.hand
+    let boardOverview st = st.coordsOfChars
 
 module Scrabble =
     open System.Threading
+
+
+    let rec startTileOfWord coordinates xWordBool board =
+        
+        let (x_coordinate, y_coordinate) = coordinates
+        let newCoords =
+            match xWordBool with
+            | true -> (x_coordinate - 1, y_coordinate)
+            | _ -> (x_coordinate, y_coordinate - 1)
+
+        match Map.tryFind newCoords board with
+        | None -> coordinates
+        | Some _ -> startTileOfWord newCoords xWordBool board
+
+    let changeCoords xWordBool (x_coordinate, y_coordinate)=
+        match xWordBool with
+        | true -> (x_coordinate + 1, y_coordinate)
+        | _ -> (x_coordinate, y_coordinate + 1)
+
+    let isLegalMove xWordBool coordinates coordsOfChars =
+        let (x_coordinate, y_coordinate) = coordinates
+
+        let subXorYcoord =
+            match xWordBool with
+            | true -> (x_coordinate, y_coordinate - 1)
+            | _ -> (x_coordinate - 1, y_coordinate)
+            
+
+        let addXorYcoord =
+            match xWordBool with
+            | true -> (x_coordinate, y_coordinate + 1)
+            | _ -> (x_coordinate + 1, y_coordinate)
+
+        match ((Map.containsKey subXorYcoord coordsOfChars) || (Map.containsKey addXorYcoord coordsOfChars)) with
+        | false -> true
+        | _ -> false
+
+
+        // if (not (
+        //         (Map.containsKey subXorYcoord coordsOfChars)
+        //         || (Map.containsKey addXorYcoord coordsOfChars)
+        //     )) then
+        //     true
+        // else
+        //     false
 
     let playGame cstream pieces (st : State.state) =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
+
+            Dictionary.step
 
             // remove the force print when you move on from manual input (or when you have learnt the format)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
@@ -80,6 +140,9 @@ module Scrabble =
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 
+                //botplay/move here
+
+
                 //removes old pieces from hand
                 for play in ms do st.hand <- MultiSet.removeSingle (play |> snd |> fst) st.hand
                 
@@ -112,6 +175,7 @@ module Scrabble =
 
         aux st
 
+
     let startGame 
             (boardP : boardProg) 
             (dictf : bool -> Dictionary.Dict) 
@@ -136,5 +200,5 @@ module Scrabble =
                   
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
 
-        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet 0u)
+        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet 0u Map.empty)
         
