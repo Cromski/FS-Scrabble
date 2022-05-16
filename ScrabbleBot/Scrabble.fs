@@ -101,8 +101,6 @@ module Scrabble =
         | _ -> if subtract then (x_coordinate, y_coordinate - 1) else (x_coordinate, y_coordinate + 1)
 
     let checkIfLegal xWordBool coordinates coordsOfChars =
-        let (x_coordinate, y_coordinate) = coordinates
-
         //TODO: check this if error occurs
         let subXorYcoord = changeCoords (not xWordBool) true coordinates
         let addXorYcoord = changeCoords (not xWordBool) false coordinates
@@ -192,7 +190,7 @@ module Scrabble =
             let list = (Seq.toList (Map.keys state.coordsOfChars))
 
             if Map.count piecesOnBoard = 0 then
-               findMove true (0,0) state pieces [] []
+               findMove false (0,0) state pieces [] []
             else
                 let rec checkCoords coordinates : State.word =
                     match coordinates with
@@ -228,6 +226,7 @@ module Scrabble =
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 
+                debugPrint (sprintf "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n%A\n" newPieces)
                 //removes old pieces from hand
                 for play in ms do st.hand <- MultiSet.removeSingle (play |> snd |> fst) st.hand
                 
