@@ -50,7 +50,7 @@ module State =
         playerNumber          : uint32
         mutable hand          : MultiSet.MultiSet<uint32>
         mutable points        : uint32
-        coordsOfChars         : Map<coord, char>
+        piecesOnBoard         : Map<coord, char>
     }
 (*
     type brick = char*int
@@ -63,13 +63,13 @@ module State =
     type word = (coord * (uint32 * (char * int))) list
 
 
-    let mkState b d pn h p map = {board = b; dict = d;  playerNumber = pn; hand = h; points = p; coordsOfChars = map}
+    let mkState b d pn h p map = {board = b; dict = d;  playerNumber = pn; hand = h; points = p; piecesOnBoard = map}
 
     let board st         = st.board
     let dict st          = st.dict
     let playerNumber st  = st.playerNumber
     let hand st          = st.hand
-    let boardOverview st = st.coordsOfChars
+    let piecesOnBoard st = st.piecesOnBoard
 
 module Scrabble =
     open System.Threading
@@ -82,134 +82,272 @@ module Scrabble =
         | x when x >= pointsWord2 -> word1
         | _ -> word2
 
+    let getCoords isHorizontal (xCoord, yCoord) : coord =
+        if isHorizontal then
+            (xCoord + 1, yCoord)
+        else
+            (xCoord, yCoord + 1)
 
-    let rec startTileOfWord coordinates xWordBool board =
-        
-        let (x_coordinate, y_coordinate) = coordinates
-        let newCoords =
-            match xWordBool with
-            | true -> (x_coordinate - 1, y_coordinate)
-            | _ -> (x_coordinate, y_coordinate - 1)
+    let rec specifiedStartingCoordinates coord isHorizontal board =
+        let xCoord, yCoord = coord
 
-        match Map.tryFind newCoords board with
-        | None -> coordinates
-        | Some _ -> startTileOfWord newCoords xWordBool board
+        let changedCoords =
+            if isHorizontal then
+                (xCoord - 1, yCoord)
+            else
+                (xCoord, yCoord - 1)
 
-    let changeCoords xWordBool subtract (x_coordinate, y_coordinate)=
-        match xWordBool with
-        | true -> if subtract then (x_coordinate - 1, y_coordinate) else (x_coordinate + 1, y_coordinate)
-        | _ -> if subtract then (x_coordinate, y_coordinate - 1) else (x_coordinate, y_coordinate + 1)
+        match Map.tryFind changedCoords board with
+        | None -> coord
+        | Some _ -> specifiedStartingCoordinates changedCoords isHorizontal board
 
-    let checkIfLegal xWordBool coordinates coordsOfChars =
-        //TODO: check this if error occurs
-        let subXorYcoord = changeCoords (not xWordBool) true coordinates
-        let addXorYcoord = changeCoords (not xWordBool) false coordinates
+    let isLegalMove (isHorizontal: bool) (coord: coord) (piecesOnBoard: Map<coord, char>) =
+        let (xCoord, yCoord) = coord
 
-        match ((Map.containsKey subXorYcoord coordsOfChars) || (Map.containsKey addXorYcoord coordsOfChars)) with
-        | false -> true
-        | _ -> false
-    
-    
-    let rec findMove xWordBool coords (state: State.state) pieces newWord highestPointValueWord
+        let minusXY =
+            if isHorizontal then
+                (xCoord, yCoord - 1)
+            else
+                (xCoord - 1, yCoord)
+
+        let plusXY =
+            if isHorizontal then
+                (xCoord, yCoord + 1)
+            else
+                (xCoord + 1, yCoord)
+
+        if (not (
+                (Map.containsKey minusXY piecesOnBoard)
+                || (Map.containsKey plusXY piecesOnBoard)
+            )) then
+            true
+        else
+            false
+
+    let rec findMove
+        (isHorizontal: bool)
+        (coordinates: coord)
+        (st: State.state)
+        (pieces: Map<uint32, Set<char * int>>)
+        (piecesLaidOnTable: State.word)
+        (longestWord: State.word)
         : State.word =
-        let x_coordinate, y_coordinate = coords
+        let xCoords, yCoords = coordinates
 
-        let newCoordinates =
-            changeCoords xWordBool false (x_coordinate, y_coordinate)
+        let changedCoords =
+            getCoords isHorizontal (xCoords, yCoords)
 
-        match Map.tryFind coords state.coordsOfChars with
+        match Map.tryFind coordinates st.piecesOnBoard with
         | Some (characterOnBoard) ->
-            match Dictionary.step characterOnBoard state.dict with
-            | Some (endOfWord, dict') ->
-                let stateUpdated = { state with dict = dict' }
+            match Dictionary.step characterOnBoard st.dict with
+            | Some (wordEnded, trie) ->
+                let stateUpdated = { st with dict = trie }
 
                 findMove
-                    xWordBool
-                    newCoordinates
+                    isHorizontal
+                    changedCoords
                     stateUpdated
                     pieces
-                    newWord
-                    (if endOfWord
-                        && (Map.containsKey newCoordinates state.coordsOfChars)
+                    piecesLaidOnTable
+                    (if wordEnded
+                        && (Map.containsKey changedCoords st.piecesOnBoard)
                            |> not then
-                         highestPointWord newWord highestPointValueWord
+                        highestPointWord longestWord piecesLaidOnTable
                      else
-                         highestPointValueWord)
-            | None -> highestPointValueWord
+                        longestWord)
+            | None -> longestWord
         | None ->
             MultiSet.fold
                 (fun accumulator pieceId _ ->
                     highestPointWord
                         (Set.fold
-                            (fun accumulator (character, value) ->
-                                match Dictionary.step character state.dict with
+                            (fun accumulator (charPiece, pointValue) ->
+                                match Dictionary.step charPiece st.dict with
                                 | None -> accumulator
-                                | Some (endOfWord, dict') ->
-                                    if checkIfLegal xWordBool coords state.coordsOfChars then
-                                        let newState =
-                                            { state with
-                                                  dict = dict'
-                                                  hand = MultiSet.removeSingle pieceId state.hand
-                                                  coordsOfChars = Map.add coords character state.coordsOfChars }
+                                | Some (endW, trie) ->
+                                    if isLegalMove isHorizontal coordinates st.piecesOnBoard then
+                                        let stateUpdated =
+                                            { st with
+                                                  dict = trie
+                                                  hand = MultiSet.removeSingle pieceId st.hand
+                                                  piecesOnBoard = Map.add coordinates charPiece st.piecesOnBoard }
 
-                                        let placePiece =
-                                            ((coords, (pieceId, (character, value)))
-                                             :: newWord)
+                                        let piecesDownOnBoard =
+                                            ((coordinates, (pieceId, (charPiece, pointValue)))
+                                             :: piecesLaidOnTable)
 
-                                        let word =
-                                            Map.tryFind newCoordinates state.coordsOfChars
+                                        let bestPossibleWord =
+                                            Map.tryFind changedCoords st.piecesOnBoard
 
-                                        let finalWord =
-                                            match word with
+                                        let resultBestPossibleWord =
+                                            match bestPossibleWord with
                                             | None ->
-                                                if endOfWord
-                                                   && (Map.containsKey newCoordinates state.coordsOfChars)
+                                                if endW
+                                                   && (Map.containsKey changedCoords st.piecesOnBoard)
                                                       |> not then
-                                                    highestPointWord highestPointValueWord placePiece
+                                                    highestPointWord longestWord piecesDownOnBoard
                                                 else
                                                     accumulator
                                             | Some (_) -> accumulator
 
                                         findMove
-                                            xWordBool
-                                            newCoordinates
-                                            newState
+                                            isHorizontal
+                                            changedCoords
+                                            stateUpdated
                                             pieces
-                                            placePiece
-                                            finalWord
+                                            piecesDownOnBoard
+                                            resultBestPossibleWord
                                     else
                                         accumulator)
-                            highestPointValueWord
+                            longestWord
                             (Map.find pieceId pieces))
                         accumulator)
-                highestPointValueWord
-                state.hand
+                longestWord
+                st.hand
+
+    let botMove (piecesOnBoard: Map<coord, char>) (st: State.state) (pieces: Map<uint32, Set<char * int>>) : State.word =
+        let coordsToList = (Seq.toList (Map.keys st.piecesOnBoard))
+
+        if Map.count piecesOnBoard = 0 then
+            highestPointWord (findMove true (0, 0) st pieces [] []) (findMove false (0, 0) st pieces [] [])
+        else
+            let rec runThroughCoords coordinates : State.word =
+                match coordinates with
+                | [] -> []
+                | (xC, yC) :: xs ->
+                    findMove true (specifiedStartingCoordinates (xC, yC) true st.piecesOnBoard) st pieces [] []
+                    |> highestPointWord (
+                        findMove false (specifiedStartingCoordinates (xC, yC) false st.piecesOnBoard) st pieces [] []
+                    )
+                    |> highestPointWord (runThroughCoords xs)
+
+            runThroughCoords coordsToList
+
+    // let rec startTileOfWord coordinates xWordBool board =
+        
+    //     let (x_coordinate, y_coordinate) = coordinates
+    //     let newCoords =
+    //         match xWordBool with
+    //         | true -> (x_coordinate - 1, y_coordinate)
+    //         | _ -> (x_coordinate, y_coordinate - 1)
+
+    //     match Map.tryFind newCoords board with
+    //     | None -> coordinates
+    //     | Some _ -> startTileOfWord newCoords xWordBool board
+
+    // let changeCoords xWordBool subtract (x_coordinate, y_coordinate)=
+    //     match xWordBool with
+    //     | true -> if subtract then (x_coordinate - 1, y_coordinate) else (x_coordinate + 1, y_coordinate)
+    //     | _ -> if subtract then (x_coordinate, y_coordinate - 1) else (x_coordinate, y_coordinate + 1)
+
+    // let checkIfLegal xWordBool coordinates coordsOfChars =
+    //     //TODO: check this if error occurs
+    //     let subXorYcoord = changeCoords (not xWordBool) true coordinates
+    //     let addXorYcoord = changeCoords (not xWordBool) false coordinates
+
+    //     match ((Map.containsKey subXorYcoord coordsOfChars) || (Map.containsKey addXorYcoord coordsOfChars)) with
+    //     | false -> true
+    //     | _ -> false
+    
+    
+    // let rec findMove xWordBool coords (state: State.state) pieces newWord highestPointValueWord
+    //     : State.word =
+    //     let x_coordinate, y_coordinate = coords
+
+    //     let newCoordinates =
+    //         changeCoords xWordBool false (x_coordinate, y_coordinate)
+
+    //     match Map.tryFind coords state.coordsOfChars with
+    //     | Some (characterOnBoard) ->
+    //         match Dictionary.step characterOnBoard state.dict with
+    //         | Some (endOfWord, dict') ->
+    //             let stateUpdated = { state with dict = dict' }
+
+    //             findMove
+    //                 xWordBool
+    //                 newCoordinates
+    //                 stateUpdated
+    //                 pieces
+    //                 newWord
+    //                 (if endOfWord && not (Map.containsKey newCoordinates state.coordsOfChars)
+    //                 then
+    //                     highestPointWord newWord highestPointValueWord
+    //                 else
+    //                     highestPointValueWord)
+    //         | None -> highestPointValueWord
+    //     | None ->
+    //         MultiSet.fold
+    //             (fun accumulator pieceId _ ->
+    //                 highestPointWord
+    //                     (Set.fold
+    //                         (fun accumulator (character, value) ->
+    //                             match Dictionary.step character state.dict with
+    //                             | None -> accumulator
+    //                             | Some (endOfWord, dict') ->
+    //                                 if checkIfLegal xWordBool coords state.coordsOfChars then
+    //                                     let newState =
+    //                                         { state with
+    //                                               dict = dict'
+    //                                               hand = MultiSet.removeSingle pieceId state.hand
+    //                                               coordsOfChars = Map.add coords character state.coordsOfChars }
+
+    //                                     let placePiece =
+    //                                         ((coords, (pieceId, (character, value)))
+    //                                          :: newWord)
+
+    //                                     let word =
+    //                                         Map.tryFind newCoordinates state.coordsOfChars
+
+    //                                     let finalWord =
+    //                                         match word with
+    //                                         | None ->
+    //                                             if endOfWord && not (Map.containsKey newCoordinates state.coordsOfChars)
+    //                                             then
+    //                                                 highestPointWord highestPointValueWord placePiece
+    //                                             else
+    //                                                 accumulator
+    //                                         | Some (_) -> accumulator
+
+    //                                     findMove
+    //                                         xWordBool
+    //                                         newCoordinates
+    //                                         newState
+    //                                         pieces
+    //                                         placePiece
+    //                                         finalWord
+    //                                 else
+    //                                     accumulator)
+    //                         highestPointValueWord
+    //                         (Map.find pieceId pieces))
+    //                     accumulator)
+    //             highestPointValueWord
+    //             state.hand
                 
                 
-    let botMove (piecesOnBoard: Map<coord, char>) (state: State.state) (pieces: Map<uint32, Set<char * int>>) : State.word =
-            let list = (Seq.toList (Map.keys state.coordsOfChars))
+    // let botMove (piecesOnBoard: Map<coord, char>) (state: State.state) (pieces: Map<uint32, Set<char * int>>) : State.word =
+    //         let list = (Seq.toList (Map.keys state.coordsOfChars))
 
-            if Map.count piecesOnBoard = 0 then
-               findMove false (0,0) state pieces [] []
-            else
-                let rec checkCoords coordinates : State.word =
-                    match coordinates with
-                    | [] -> []
-                    | (xC, yC) :: xs ->
-                        findMove true (startTileOfWord (xC, yC) true state.coordsOfChars) state pieces [] []
-                        |> highestPointWord (
-                            findMove false (startTileOfWord (xC, yC) false state.coordsOfChars) state pieces [] []
-                        )
-                        |> highestPointWord (checkCoords xs)
+    //         if Map.count piecesOnBoard = 0 then
+    //            findMove false (0,0) state pieces [] []
+    //         else
+    //             let rec checkCoords coordinates : State.word =
+    //                 match coordinates with
+    //                 | [] -> []
+    //                 | (xC, yC) :: xs ->
+    //                     findMove true (startTileOfWord (xC, yC) true state.coordsOfChars) state pieces [] []
+    //                     |> highestPointWord (
+    //                         findMove false (startTileOfWord (xC, yC) false state.coordsOfChars) state pieces [] []
+    //                     )
+    //                     |> highestPointWord (checkCoords xs)
 
-                checkCoords list
+    //             checkCoords list
     
     let playGame cstream pieces (st : State.state) =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
 
-            let move = botMove st.coordsOfChars st pieces
+            let move = botMove st.piecesOnBoard st pieces
             
             (*let input =  System.Console.ReadLine()
             let move = RegEx.parseMove input*)

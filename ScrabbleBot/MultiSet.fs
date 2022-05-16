@@ -18,7 +18,10 @@ module internal MultiSet
         | a when contains a s -> s.Item(a)
         | _ -> 0u
     
-    let add a n (s: MultiSet<'a>) = s.Add(a, n)
+    let add a n (s: MultiSet<'a>) = 
+        if Map.exists a s then s.Item(a) + 
+        
+    //s.Add(a, n)
     
     let addSingle a (s: MultiSet<'a>) = s.Add(a, 1u)
     
