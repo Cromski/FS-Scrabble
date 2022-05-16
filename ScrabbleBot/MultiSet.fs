@@ -18,21 +18,22 @@ module internal MultiSet
         | a when contains a s -> s.Item(a)
         | _ -> 0u
     
-    let add a n (s: MultiSet<'a>) = 
-        if Map.exists a s then s.Item(a) + 
+    let add a n (s: MultiSet<'a>) : Map<'a, uint32> = 
+        if contains a s then Map.add a (s.Item(a) + n) s else Map.add a n s 
         
     //s.Add(a, n)
     
-    let addSingle a (s: MultiSet<'a>) = s.Add(a, 1u)
+    let addSingle a (s: MultiSet<'a>) =
+        if contains a s then Map.add a (s.Item(a) + 1u) s else s.Add(a, 1u)
     
     let remove a n (s: MultiSet<'a>) =
         match a with
-        | a when n < s.Item(a) -> add a (s.Item(a)-n) s
+        | a when n < s.Item(a) -> s.Add(a, s.Item(a)-n)
         | a -> s.Remove(a)
 
     let removeSingle a (s:MultiSet<'a>) =
         match a with
-        | a when contains a s -> add a (s.Item(a)-1u) s
+        | a when contains a s -> s.Add(a, s.Item(a)-1u)
         | _ -> s
         
     let fold f acc (s:MultiSet<'a>) = Map.fold (f) acc s
