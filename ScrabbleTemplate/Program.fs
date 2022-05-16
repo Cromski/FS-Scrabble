@@ -63,6 +63,6 @@ let main argv =
           board dictionary handSize timeout tiles seed port players
     
     ScrabbleUtil.DebugPrint.forcePrint ("Server has terminated. Press Enter to exit program.\n")
-    System.Console.ReadLine () |> ignore
+    Console.ReadLine () |> ignore
 
     0
