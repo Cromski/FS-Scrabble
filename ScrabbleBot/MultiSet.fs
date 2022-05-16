@@ -20,8 +20,6 @@ module internal MultiSet
     
     let add a n (s: MultiSet<'a>) : Map<'a, uint32> = 
         if contains a s then Map.add a (s.Item(a) + n) s else Map.add a n s 
-        
-    //s.Add(a, n)
     
     let addSingle a (s: MultiSet<'a>) =
         if contains a s then Map.add a (s.Item(a) + 1u) s else s.Add(a, 1u)
@@ -32,9 +30,7 @@ module internal MultiSet
         | a -> s.Remove(a)
 
     let removeSingle a (s:MultiSet<'a>) =
-        match a with
-        | a when contains a s -> s.Add(a, s.Item(a)-1u)
-        | _ -> s
+        if contains a s && s.Item(a) > 1u then s.Add(a, s.Item(a)-1u) else if contains a s then s.Remove(a) else s
         
     let fold f acc (s:MultiSet<'a>) = Map.fold (f) acc s
     
