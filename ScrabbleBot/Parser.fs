@@ -1,17 +1,9 @@
-﻿module internal ImpParser
+﻿module internal Parser
 
     open Eval
     open ScrabbleUtil
-
-    (*
-
-    The interfaces for JParsec and FParsecLight are identical and the implementations should always produce the same output
-    for successful parses although running times and error messages will differ. Please report any inconsistencies.
-
-    *)
-
-    open FParsecLight.TextParser           // Example parser combinator library. Use for CodeJudge.
-    // open FParsecLight.TextParser     // Industrial parser-combinator library. Use for Scrabble Project.
+    open FParsecLight.TextParser
+    open StateMonad
     
     let pIntToChar  = pstring "intToChar"
     let pPointValue = pstring "pointValue"
@@ -112,12 +104,13 @@
 
     let parseBoardProg _ = failwith "not implemented"
 
-    type boardFun2 = coord -> StateMonad.Result<square option, StateMonad.Error>
+    type squareFun = word -> int -> int -> Result<int, Error>
+    type boardFun2 = coord -> StateMonad.Result<square option, Error>
     type board = {
         center        : coord
         defaultSquare : square
         squares       : boardFun2
     }
 
-    let mkBoard (bp : boardProg) = failwith "not implemented"
+    let mkBoard : boardProg -> board = fun _ -> {center = (0,0); defaultSquare = Map.empty; squares = fun _ -> Success (Some Map.empty)}
 
