@@ -98,6 +98,7 @@
 (* These five types will move out of this file once you start working on the project *)
 
     type word   = (char * int) list
+    
     type square = Map<int, squareFun>
 
     let parseSquareProg _ = failwith "not implemented"
