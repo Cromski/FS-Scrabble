@@ -82,12 +82,30 @@ module Scrabble =
         | x when x >= pointsWord2 -> word1
         | _ -> word2
 
+
+    let rec startTileOfWord coordinates xWordBool board =
+        
+        let (x_coordinate, y_coordinate) = coordinates
+        let newCoords =
+            match xWordBool with
+            | true -> (x_coordinate - 1, y_coordinate)
+            | _ -> (x_coordinate, y_coordinate - 1)
+
+        match Map.tryFind newCoords board with
+        | None -> coordinates
+        | Some _ -> startTileOfWord newCoords xWordBool board
+
+    let changeCoords xWordBool subtract (x_coordinate, y_coordinate)=
+        match xWordBool with
+        | true -> if subtract then (x_coordinate - 1, y_coordinate) else (x_coordinate + 1, y_coordinate)
+        | _ -> if subtract then (x_coordinate, y_coordinate - 1) else (x_coordinate, y_coordinate + 1)
+
     let checkIfLegal xWordBool coordinates coordsOfChars =
         let (x_coordinate, y_coordinate) = coordinates
 
         //TODO: check this if error occurs
-        let subXorYcoord = usefulMethods.changeCoords (not xWordBool) true coordinates
-        let addXorYcoord = usefulMethods.changeCoords (not xWordBool) false coordinates
+        let subXorYcoord = changeCoords (not xWordBool) true coordinates
+        let addXorYcoord = changeCoords (not xWordBool) false coordinates
 
         match ((Map.containsKey subXorYcoord coordsOfChars) || (Map.containsKey addXorYcoord coordsOfChars)) with
         | false -> true
@@ -98,11 +116,18 @@ module Scrabble =
         : State.word =
         let x_coordinate, y_coordinate = coords
 
+        //finds new coordinates by incrementing x and y value with 1 each time
         let newCoordinates =
-            usefulMethods.changeCoords xWordBool false (x_coordinate, y_coordinate)
+            changeCoords xWordBool false
+                (x_coordinate, y_coordinate)
 
+        (*
+        Looks to see if there is a char on the board at the given newCoordinates.
+        If it matches with "|Some" we've found a char, otherwise, if it matches with "|None", 
+        we didn't find a char at the given coords
+        *)
         match Map.tryFind coords state.coordsOfChars with
-        | Some (characterOnBoard) ->
+        | Some characterOnBoard ->
             match Dictionary.step characterOnBoard state.dict with
             | Some (endOfWord, dict') ->
                 let stateUpdated = { state with dict = dict' }
@@ -180,9 +205,9 @@ module Scrabble =
                     match coordinates with
                     | [] -> []
                     | (xC, yC) :: xs ->
-                        findMove true (usefulMethods.startTileOfWord (xC, yC) true state.coordsOfChars) state pieces [] []
+                        findMove true (startTileOfWord (xC, yC) true state.coordsOfChars) state pieces [] []
                         |> highestPointWord (
-                            findMove false (usefulMethods.startTileOfWord (xC, yC) false state.coordsOfChars) state pieces [] []
+                            findMove false (startTileOfWord (xC, yC) false state.coordsOfChars) state pieces [] []
                         )
                         |> highestPointWord (checkCoords xs)
 
