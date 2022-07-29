@@ -222,7 +222,7 @@ module Scrabble =
                 highestPointValueWord
                 state.hand
 
-    let botMove (piecesOnBoard: Map<coord, char>) (state: State.state) (pieces: Map<uint32, Set<char * int>>) : State.word =
+    let bestWordToPlay (piecesOnBoard: Map<coord, char>) (state: State.state) (pieces: Map<uint32, Set<char * int>>) : State.word =
             let coordinates = Map.keys state.coordsOfChars |> List.ofSeq
             match Map.count piecesOnBoard = 0 with
             | false ->
@@ -243,7 +243,7 @@ module Scrabble =
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
 
-            let move = botMove st.coordsOfChars st pieces
+            let move = bestWordToPlay st.coordsOfChars st pieces
             
             (*let input =  System.Console.ReadLine()
             let move = RegEx.parseMove input*)
@@ -304,13 +304,13 @@ module Scrabble =
             (tiles : Map<uint32, tile>)
             (timeout : uint32 option) 
             (cstream : Stream) =
-        debugPrint 
+        (*debugPrint 
             $"Starting game!
                       number of players = %d{numPlayers}
                       player id = %d{playerNumber}
                       player turn = %d{playerTurn}
                       hand =  %A{hand}
-                      timeout = %A{timeout}\n\n"
+                      timeout = %A{timeout}\n\n"*)
 
         //let dict = dictf true // Uncomment if using a gaddag for your dictionary
         let dict = dictf false // Uncomment if using a trie for your dictionary
