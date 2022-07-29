@@ -1,5 +1,6 @@
 ﻿namespace OsmanOgJeppe
 
+open System.Collections.Generic
 open Eval
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
@@ -84,25 +85,23 @@ module Scrabble =
         | x when x >= pointsWord2 -> word1
         | _ -> word2
 
-
+    let prevTile coordinates xBool = //gets the previous tile of word
+            let (x_coordinate, y_coordinate) = coordinates
+            match xBool with 
+            | false -> (x_coordinate, y_coordinate - 1) //check above tile
+            | _ -> (x_coordinate - 1, y_coordinate) //check left tile
+    
     //Finder det tile på boardet der enten ikke har noget til venstre for den eller ovenover den, alt efter hvilken værdig xWordBool har.
     //Returnere et koordinat til en tile.
     let rec startTileOfWord coordinates xWordBool board =
-        
-        let (x_coordinate, y_coordinate) = coordinates
-        let newCoords =
-            match xWordBool with
-            | true -> (x_coordinate - 1, y_coordinate)
-            | _ -> (x_coordinate, y_coordinate - 1)
-
-        match Map.tryFind newCoords board with
+        match Map.tryFind (prevTile coordinates xWordBool) board with
         | None -> coordinates
-        | Some _ -> startTileOfWord newCoords xWordBool board
+        | Some _ -> startTileOfWord (prevTile coordinates xWordBool) xWordBool board
 
         
     //Takes current coordinates and returns a new set of coords.
     //The new coords returned, depends on xWordBool and Subtract.
-    let changeCoords xWordBool subtract (x_coordinate, y_coordinate)=
+    let changeCoordinates xWordBool subtract (x_coordinate, y_coordinate)=
         match xWordBool with
         | true -> if subtract then (x_coordinate - 1, y_coordinate) else (x_coordinate + 1, y_coordinate)
         | _ -> if subtract then (x_coordinate, y_coordinate - 1) else (x_coordinate, y_coordinate + 1)
@@ -112,9 +111,9 @@ module Scrabble =
     //Returns false if there is any adjacent tiles, to the word you are trying to play.
     let checkIfLegal coordinates coordsOfChars =
         //højre, venstre
-        let horizontal = [changeCoords true true coordinates; changeCoords true false coordinates]
+        let horizontal = [changeCoordinates true true coordinates; changeCoordinates true false coordinates]
         //op, ned
-        let vertical = [changeCoords false true coordinates; changeCoords false false coordinates]
+        let vertical = [changeCoordinates false true coordinates; changeCoordinates false false coordinates]
         
         //højre, venstre, op, ned
         [Map.containsKey horizontal[0] coordsOfChars; Map.containsKey horizontal.[1] coordsOfChars; 
@@ -141,13 +140,13 @@ module Scrabble =
                             State.hand = MultiSet.removeSingle pieceId state.hand
                             State.coordsOfChars = Map.add coords character state.coordsOfChars }
     
-    let rec findMove xWordBool coords (state: State.state) pieces newWord highestPointValueWord
+    let rec findHighestPointWord xWordBool coords (state: State.state) pieces newWord highestPointValueWord
         : State.word =
         let x_coordinate, y_coordinate = coords
 
         //finds new coordinates by incrementing x and y value with 1 each time
         let newCoordinates =
-            changeCoords xWordBool false
+            changeCoordinates xWordBool false
                 (x_coordinate, y_coordinate)
 
         (*
@@ -161,7 +160,7 @@ module Scrabble =
             | Some (endOfWord, dict') ->
                 let stateUpdated = { state with dict = dict' }
 
-                findMove
+                findHighestPointWord
                     xWordBool
                     newCoordinates
                     stateUpdated
@@ -187,13 +186,12 @@ module Scrabble =
                                     match xWordBool with
                                     //dict' pieceId state coords character value newWord newCoordinates endOfWord highestPointValueWord placePiece 
                                     | true -> if not checklegal[2] && not checklegal[3] then
-
                                                 let word =
                                                     Map.tryFind newCoordinates state.coordsOfChars
 
                                                 let placePiece = placePiece coords pieceId character value newWord
 
-                                                findMove
+                                                findHighestPointWord
                                                     xWordBool
                                                     newCoordinates
                                                     (newState state dict' pieceId coords character)
@@ -208,7 +206,7 @@ module Scrabble =
 
                                                 let placePiece = placePiece coords pieceId character value newWord
 
-                                                findMove
+                                                findHighestPointWord
                                                     xWordBool
                                                     newCoordinates
                                                     (newState state dict' pieceId coords character)
@@ -218,33 +216,27 @@ module Scrabble =
                                                 else
                                                     accumulator
                                                     )
-                                    
                             highestPointValueWord
                             (Map.find pieceId pieces))
                         accumulator)
                 highestPointValueWord
                 state.hand
 
-    
-                
-                
     let botMove (piecesOnBoard: Map<coord, char>) (state: State.state) (pieces: Map<uint32, Set<char * int>>) : State.word =
-            let list = (Seq.toList (Map.keys state.coordsOfChars))
-
-            if Map.count piecesOnBoard = 0 then
-               findMove true (0,0) state pieces [] []
-            else
-                let rec checkCoords coordinates : State.word =
-                    match coordinates with
-                    | [] -> []
-                    | (xC, yC) :: xs ->
-                        findMove true (startTileOfWord (xC, yC) true state.coordsOfChars) state pieces [] []
-                        |> highestPointWord (
-                            findMove false (startTileOfWord (xC, yC) false state.coordsOfChars) state pieces [] []
-                        )
-                        |> highestPointWord (checkCoords xs)
-
-                checkCoords list
+            let coordinates = Map.keys state.coordsOfChars |> List.ofSeq
+            match Map.count piecesOnBoard = 0 with
+            | false ->
+                    let rec checkCoords coordinates' : State.word =
+                        match coordinates' with
+                        | (x_coordinate, y_coordinate) :: xs ->
+                            highestPointWord (checkCoords xs) (highestPointWord 
+                                (findHighestPointWord true (startTileOfWord (x_coordinate, y_coordinate) true state.coordsOfChars) state pieces [] [])
+                                (findHighestPointWord false (startTileOfWord (x_coordinate, y_coordinate) false state.coordsOfChars) state pieces [] [])
+                            )
+                        | _ -> []
+                    checkCoords coordinates
+            | _ -> findHighestPointWord true (0,0) state pieces [] []
+            
     
     let playGame cstream pieces (st : State.state) =
 
